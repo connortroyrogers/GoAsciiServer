@@ -12,8 +12,9 @@ A lightweight UDP client/server program written in Go for sending plain-text (AS
 
 ## Project layout
 
-- `rdt_packet.go` - main program entry and client/server logic
+- `asciiServer.go` - main program entry and client/server logic
 - `go.mod` - Go module definition
+- `/doom/ - directory for Doom file and Doom Ascii`
 
 ## Requirements
 
@@ -52,5 +53,3 @@ You can also run without flags and choose interactively:
 ## Notes
 
 - Current default address is local-only (`127.0.0.1`)
-- Message buffer limit is `256` bytes per read
-- This is a simple educational baseline for UDP communication
