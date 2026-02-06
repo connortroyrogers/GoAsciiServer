@@ -26,19 +26,19 @@ Open two terminals in the project folder.
 ### 1) Start the server
 
 ```bash
-go run rdt_packet.go -mode=server
+./asciiServer mode=server
 ```
 
 ### 2) Start the client
 
 ```bash
-go run rdt_packet.go -mode=client
+./asciiServer mode=client
 ```
 
 You can also run without flags and choose interactively:
 
 ```bash
-go run rdt_packet.go
+./asciiServer
 ```
 
 ## Example flow
