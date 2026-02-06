@@ -2,15 +2,22 @@ package main
 
 import (
 	"bufio"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
+	"syscall"
+
+	"github.com/creack/pty"
 )
 
 const (
-	MESSAGELIMIT = 256
+	MESSAGELIMIT = 4096
 )
 
 func main() {
@@ -53,7 +60,6 @@ func gbnServer(iface string, port int) {
 		IP:   net.ParseIP(iface),
 		Port: port,
 	}
-
 	conn, err := net.ListenUDP("udp", &addr)
 	if err != nil {
 		panic(err)
@@ -71,32 +77,63 @@ func gbnServer(iface string, port int) {
 	}
 
 	fmt.Printf("Client connected: %s\n", clientAddr.String())
-	fmt.Println("Type a message to send to client (type 'exit' to quit)")
+	fmt.Println("Starting doom-ascii stream...")
 
-	stdin := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print("server> ")
-		text, err := stdin.ReadString('\n')
-		if err != nil {
-			fmt.Println("input error:", err)
-			return
-		}
+	if err := streamDoomOutput(conn, clientAddr); err != nil {
+		fmt.Println("doom stream error:", err)
+	}
+}
 
-		message := strings.TrimSpace(text)
-		if message == "" {
-			continue
-		}
-
-		_, err = conn.WriteToUDP([]byte(message), clientAddr)
-		if err != nil {
-			fmt.Println("write error:", err)
-			continue
-		}
-
-		if message == "exit" {
-			return
+func streamDoomOutput(conn *net.UDPConn, clientAddr *net.UDPAddr) error {
+	wadFile := "DOOM1.wad"
+	if _, err := os.Stat(filepath.Join("doom", wadFile)); err != nil {
+		if _, upperErr := os.Stat(filepath.Join("doom", "DOOM1.WAD")); upperErr == nil {
+			wadFile = "DOOM1.WAD"
 		}
 	}
+
+	cmd := exec.Command("./doom-ascii", "-iwad", wadFile)
+	cmd.Dir = "doom"
+
+	ptyFile, err := pty.Start(cmd)
+	if err != nil {
+		return fmt.Errorf("start doom-ascii in pty: %w", err)
+	}
+	defer ptyFile.Close()
+
+	waitCh := make(chan error, 1)
+	go func() {
+		waitErr := cmd.Wait()
+		waitCh <- waitErr
+		close(waitCh)
+	}()
+
+	buf := make([]byte, MESSAGELIMIT)
+	for {
+		n, err := ptyFile.Read(buf)
+		if n > 0 {
+			if _, writeErr := conn.WriteToUDP(buf[:n], clientAddr); writeErr != nil {
+				return fmt.Errorf("send doom output: %w", writeErr)
+			}
+		}
+
+		if err != nil {
+			if errors.Is(err, io.EOF) || errors.Is(err, syscall.EIO) {
+				break
+			}
+			return fmt.Errorf("read doom output: %w", err)
+		}
+	}
+
+	if _, err := conn.WriteToUDP([]byte("exit"), clientAddr); err != nil {
+		return fmt.Errorf("send exit: %w", err)
+	}
+
+	if err := <-waitCh; err != nil {
+		return fmt.Errorf("doom-ascii exited with error: %w", err)
+	}
+
+	return nil
 }
 
 // Client
@@ -128,10 +165,12 @@ func gbnClient(host string, port int) {
 			continue
 		}
 
-		message := string(buf[:n])
-		fmt.Printf("Server: %s\n", message)
+		if n == 4 && string(buf[:n]) == "exit" {
+			return
+		}
 
-		if message == "exit" {
+		if _, err := os.Stdout.Write(buf[:n]); err != nil {
+			fmt.Println("stdout write error:", err)
 			return
 		}
 	}
