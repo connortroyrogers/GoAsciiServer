@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-
+	"bytes"
 	"github.com/creack/pty"
 )
 
@@ -174,4 +174,41 @@ func gbnClient(host string, port int) {
 			return
 		}
 	}
+}
+
+func rlEncode(input []byte) []byte{
+	if len(input) == 0{
+		return nil
+	}
+	var buf bytes.Buffer
+	cnt := 1
+	for i := 1; i<len(input); i++{
+		if input[i] == input[i-1] && cnt < 255{
+			cnt++
+		}else{
+			buf.WriteByte(byte(cnt))
+			buf.WriteByte(input[i-1])
+			cnt = 1
+		}
+	}
+	buf.WriteByte(byte(cnt))
+	buf.WriteByte(input[len(input)-1])
+
+	return buf.Bytes()
+}
+
+func rlDecode(input []byte) ([]byte, error){
+	var buf bytes.Buffer
+	for i := 0; i<len(input); i += 2{
+		if i+1 >= len(input){
+			return nil, fmt.Errorf("invalid rle data")
+		}
+		cnt := int(input[i])
+		b:= input[i+1]
+		
+		for j:=0; j < cnt; j++{
+			buf.WriteByte(b)
+		}
+	}
+	return buf.Bytes(), nil
 }
