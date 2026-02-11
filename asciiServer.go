@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/creack/pty"
 	"io"
 	"net"
 	"os"
@@ -12,8 +14,6 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
-	"bytes"
-	"github.com/creack/pty"
 )
 
 const (
@@ -108,11 +108,11 @@ func streamDoomOutput(conn *net.UDPConn, clientAddr *net.UDPAddr) error {
 		close(waitCh)
 	}()
 
-	buf := make([]byte, MESSAGELIMIT)
+	buf := make([]byte, MESSAGELIMIT*2)
 	for {
 		n, err := ptyFile.Read(buf)
 		if n > 0 {
-			if _, writeErr := conn.WriteToUDP(buf[:n], clientAddr); writeErr != nil {
+			if _, writeErr := conn.WriteToUDP(rlEncode(buf[:n]), clientAddr); writeErr != nil {
 				return fmt.Errorf("send doom output: %w", writeErr)
 			}
 		}
@@ -156,7 +156,7 @@ func gbnClient(host string, port int) {
 	}
 
 	fmt.Println("Connected to server. Waiting for messages...")
-	buf := make([]byte, MESSAGELIMIT)
+	buf := make([]byte, MESSAGELIMIT*2)
 
 	for {
 		n, err := conn.Read(buf)
@@ -168,47 +168,56 @@ func gbnClient(host string, port int) {
 		if n == 4 && string(buf[:n]) == "exit" {
 			return
 		}
-
-		if _, err := os.Stdout.Write(buf[:n]); err != nil {
+		out, err := rlDecode(buf[:n])
+		if err != nil {
+			fmt.Println("decode error:", err)
+			continue
+		}
+		if _, err := os.Stdout.Write(out); err != nil {
 			fmt.Println("stdout write error:", err)
 			return
 		}
 	}
 }
 
-func rlEncode(input []byte) []byte{
-	if len(input) == 0{
-		return nil
+func rlEncode(input []byte) []byte {
+	if len(input) == 0 {
+		return []byte{}
 	}
+
 	var buf bytes.Buffer
-	cnt := 1
-	for i := 1; i<len(input); i++{
-		if input[i] == input[i-1] && cnt < 255{
-			cnt++
-		}else{
-			buf.WriteByte(byte(cnt))
-			buf.WriteByte(input[i-1])
-			cnt = 1
+
+	for i := 0; i < len(input); {
+		count := 1
+		for i+count < len(input) && input[i+count] == input[i] && count < 255 {
+			count++
 		}
+
+		buf.WriteByte(byte(count))
+		buf.WriteByte(input[i])
+		i += count
 	}
-	buf.WriteByte(byte(cnt))
-	buf.WriteByte(input[len(input)-1])
 
 	return buf.Bytes()
 }
 
-func rlDecode(input []byte) ([]byte, error){
+func rlDecode(input []byte) ([]byte, error) {
+	if len(input)%2 != 0 {
+		return nil, fmt.Errorf("invalid RLE payload length: %d", len(input))
+	}
+
 	var buf bytes.Buffer
-	for i := 0; i<len(input); i += 2{
-		if i+1 >= len(input){
-			return nil, fmt.Errorf("invalid rle data")
+	for i := 0; i < len(input); i += 2 {
+		count := int(input[i])
+		if count == 0 {
+			return nil, fmt.Errorf("invalid RLE run length at index %d", i)
 		}
-		cnt := int(input[i])
-		b:= input[i+1]
-		
-		for j:=0; j < cnt; j++{
+
+		b := input[i+1]
+		for j := 0; j < count; j++ {
 			buf.WriteByte(b)
 		}
 	}
+
 	return buf.Bytes(), nil
 }
