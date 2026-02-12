@@ -80,3 +80,4 @@ go run asciiServer.go
 - This project was inspired by ThePrimeagen's video "1000 Players - One Game of Doom"
 - This project relies on the github project doom-ascii by wojciech-graj
 - Because of it reliance on the doom-ascii, a doom .WAD file is required and can be obtained via shareware
+- The .WAD file should be named DOOM1.WAD and placed in the /doom/ directory
