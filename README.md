@@ -28,6 +28,7 @@ By default, both sides communicate on `127.0.0.1:4040`.
 - Go `1.25.6`+
 - A terminal that can handle high-volume ANSI/text updates
 - `doom/doom-ascii` and a valid WAD file (`DOOM1.wad` or `DOOM1.WAD`)
+- 
 
 ## Quick Start
 
@@ -77,3 +78,5 @@ go run asciiServer.go
 - This is currently single-client per server run (first handshake wins).
 - UDP is used as-is (no retransmit/ordering guarantees).
 - This project was inspired by ThePrimeagen's video "1000 Players - One Game of Doom"
+- This project relies on the github project doom-ascii by wojciech-graj
+- Because of it reliance on the doom-ascii, a doom .WAD file is required and can be obtained via shareware
