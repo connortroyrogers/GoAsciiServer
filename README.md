@@ -1,55 +1,79 @@
-# Go ASCII Server
+# Go UDP Doom Stream
 
-A lightweight UDP client/server program written in Go for sending plain-text (ASCII) messages over a local network.
+Stream terminal output from `doom-ascii` over UDP.
 
-## What it does
+This project runs as either a **server** or **client**:
+- The server launches `doom-ascii` in a PTY, captures its live frame output, run-length encodes it, and sends it over UDP.
+- The client connects, decodes frames, and renders the stream directly to stdout.
 
-- Starts in `server` or `client` mode
-- Uses UDP on `127.0.0.1:4040` by default
-- Server accepts a client handshake, then sends messages from terminal input
-- Client listens and prints incoming messages in real time
-- Sending `exit` closes the session cleanly
+By default, both sides communicate on `127.0.0.1:4040`.
 
-## Project layout
+## Features
 
-- `asciiServer.go` - main program entry and client/server logic
-- `go.mod` - Go module definition
-- `/doom/ - directory for Doom file and Doom Ascii`
+- Two startup modes: `server` and `client`
+- Simple UDP handshake (`client-hello`)
+- PTY-based capture of `doom-ascii` output
+- Lightweight RLE compression/decompression for frame transport
+- Graceful session shutdown via `exit` signal
+
+## Project Layout
+
+- `asciiServer.go` - main entrypoint, UDP server/client logic, and RLE codec
+- `go.mod` - module metadata and dependencies
+- `doom/doom-ascii` - bundled Doom ASCII renderer binary
+- `doom/DOOM1.WAD` - Doom WAD data used by the server
 
 ## Requirements
 
-- Go `1.25.6` or newer
+- Go `1.25.6`+
+- A terminal that can handle high-volume ANSI/text updates
+- `doom/doom-ascii` and a valid WAD file (`DOOM1.wad` or `DOOM1.WAD`)
 
-## Run the program
+## Quick Start
 
-Open two terminals in the project folder.
+Open two terminals in this directory.
 
-### 1) Start the server
-
-```bash
-./asciiServer mode=server
-```
-
-### 2) Start the client
+1) Start the server:
 
 ```bash
-./asciiServer mode=client
+./asciiServer -mode=server
+```
+or
+```bash
+go run asciiServer.go -mode=server
 ```
 
-You can also run without flags and choose interactively:
+2) Start the client:
+
+```bash
+./asciiServer -mode=client
+```
+or
+```bash
+go run asciiServer.go -mode=client
+```
+
+You can also launch without flags and choose interactively:
 
 ```bash
 ./asciiServer
 ```
+or
+```bash
+go run asciiServer.go
+```
 
-## Example flow
+## How It Works
 
-1. Start server
-2. Start client
-3. Type messages in the server terminal
-4. Read messages in the client terminal
-5. Type `exit` on the server to close both sides
+1. Client sends a `client-hello` packet.
+2. Server accepts the first client, starts `doom-ascii`, and reads PTY output.
+3. Server RLE-encodes frame chunks and sends them over UDP.
+4. Client decodes each payload and writes the frame data to stdout.
+5. When the stream ends, server sends `exit` and the client returns.
 
 ## Notes
 
-- Current default address is local-only (`127.0.0.1`)
+- Current bind/connect target is hardcoded to `127.0.0.1:4040` in `main()`.
+- This is currently single-client per server run (first handshake wins).
+- UDP is used as-is (no retransmit/ordering guarantees).
+- This project was inspired by ThePrimeagen's video "1000 Players - One Game of Doom"
