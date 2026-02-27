@@ -54,7 +54,7 @@ or
 go run asciiServer.go -mode=client
 ```
 
-You can also launch without flags and choose interactively:
+3) You can also launch without flags and choose interactively:
 
 ```bash
 ./asciiServer
